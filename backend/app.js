@@ -92,6 +92,6 @@ app.get('/logout', (req, res) => {
 	const logoutUrl = `${USER_POOL_DOMAIN}/logout?client_id=1k4fnaelfkln0pfpmkb28t1v92&logout_uri=<logout uri>`
 	res.redirect(logoutUrl)
 })
-
+app.set('views', '../frontend');
 app.set('view engine', 'ejs')
 app.listen(3000)
