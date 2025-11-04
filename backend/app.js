@@ -35,7 +35,7 @@ const checkAuth = (req, res, next) => {
 }
 
 app.get('/', checkAuth, (req, res) => {
-	res.render('home', {
+	res.render('../frontend/home', {
 		isAuthenticated: req.isAuthenticated,
 		userInfo: req.session.userInfo,
 	})
