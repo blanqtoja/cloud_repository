@@ -4,16 +4,26 @@ const session = require('express-session')
 const { Issuer, generators } = require('openid-client')
 const cors = require('cors')
 const path = require('path')
+const multer = require('multer')
+const upload = multer()
+const { S3Client } = require("@aws-sdk/client-s3");
+const { userInfo } = require('os')
 
 const app = express()
 
 const SESSION_SECRET = process.env.SESSION_SECRET
 const FRONTEND_URL = process.env.FRONTEND_URL
 const REDIRECT_URI = process.env.REDIRECT_URI
+
 const USER_POOL_DOMAIN = process.env.USER_POOL_DOMAIN
 const CLIENT_ID = process.env.CLIENT_ID
 const ISSUER_URL = process.env.ISSUER_URL
+const CLIENT_SECRET = process.env.CLIENT_SECRET
 
+const AWS_REGION = process.env.AWS_REGION
+const AWS_ACCESS_KEY_ID = process.env.AWS_ACCESS_KEY_ID
+const AWS_SECRET_ACCESS_KEY = process.env.AWS_SECRET_ACCESS_KEY
+const AWS_BUCKET_NAME = process.env.AWS_BUCKET_NAME
 
 app.use(express.json()) // parsing reqs to json
 
@@ -48,11 +58,11 @@ const s3Client = new S3Client({
 
 
 
-// --- Logika OpenID (Cognito) ---
+// OpenID logic
 
 let client
 async function initializeClient() {
-	// Odkrywamy konfigurację z domeny puli użytkowników
+	// Discover config from user pool domain
 	const issuer = await Issuer.discover(ISSUER_URL)
 	client = new issuer.Client({
 		client_id: CLIENT_ID,
@@ -110,6 +120,7 @@ app.get('/logout', (req, res) => {
 	req.session.destroy(err => {
 		res.clearCookie('connect.sid')
 		res.redirect(logoutUrl)
+		console.log(`user: ${client.client_id} logged out`)
 	})
 })
 
@@ -134,12 +145,28 @@ app.get(CALLBACK_PATH, async (req, res) => {
 	}
 })
 
+// endpoints for S3 
+
+// Post endpoint to upload file to S3
+app.post('/upload', upload.single('choosenFile'), async (req, res) => {
+	console.log(req.body)
+	console.log(req.file)
+
+
+
+	req.file.buffer
+	res.send({})
+})
+
+
+
 // take files from public dir
-app.use(express.static(path.join(__dirname, 'public')))
+// app.use(express.static(path.join(__dirname, 'public')))
 
 // response to not existing endpoint
 app.get(/.*/, (req, res) => {
-	res.sendFile(path.join(__dirname, 'public', 'index.html'))
+	res.sendFile(path.join(__dirname, '../frontend', 'index.html'))
+	// res.sendFile(path.join(__dirname, 'public', 'index.html'))
 })
 
 app.listen(3000, () => {

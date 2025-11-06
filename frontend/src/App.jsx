@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import axios from 'axios'
+import UploadFile from './UploadFile'
 
 const API_URL = 'http://localhost:3000'
 
@@ -67,6 +68,7 @@ function App() {
 					</a>
 
 					<hr style={{ margin: '2rem 0' }} />
+					<UploadFile />
 				</div>
 			) : (
 				<div>
@@ -78,6 +80,7 @@ function App() {
 				</div>
 			)}
 		</div>
+
 	)
 }
 
