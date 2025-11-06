@@ -7,33 +7,46 @@ const path = require('path')
 
 const app = express()
 
-// Odczytujemy konfigurację z .env
+const SESSION_SECRET = process.env.SESSION_SECRET
 const FRONTEND_URL = process.env.FRONTEND_URL
 const REDIRECT_URI = process.env.REDIRECT_URI
 const USER_POOL_DOMAIN = process.env.USER_POOL_DOMAIN
 const CLIENT_ID = process.env.CLIENT_ID
 const ISSUER_URL = process.env.ISSUER_URL
 
-// --- Konfiguracja ---
+
+app.use(express.json()) // parsing reqs to json
 
 app.use(
 	cors({
-		origin: FRONTEND_URL, // Zezwalaj na żądania tylko z tej domeny
-		credentials: true, // Zezwalaj na przesyłanie ciasteczek
+		origin: FRONTEND_URL,
+		credentials: true,
 	})
 )
 
 app.use(
 	session({
-		secret: 'super-tajny-sekret-zmien-mnie', // Lepiej wczytać z .env
+		secret: SESSION_SECRET,
 		resave: false,
 		saveUninitialized: false,
 		cookie: {
-			// secure: true, // Włącz na produkcji (gdy masz HTTPS)
+			// secure: true, 
 			httpOnly: true,
 		},
 	})
 )
+
+// S3 configuration
+
+const s3Client = new S3Client({
+	region: AWS_REGION,
+	credentials: {
+		accessKeyId: AWS_ACCESS_KEY_ID,
+		secretAccessKey: AWS_SECRET_ACCESS_KEY,
+	},
+})
+
+
 
 // --- Logika OpenID (Cognito) ---
 
@@ -43,9 +56,10 @@ async function initializeClient() {
 	const issuer = await Issuer.discover(ISSUER_URL)
 	client = new issuer.Client({
 		client_id: CLIENT_ID,
-		client_secret: process.env.CLIENT_SECRET,
+		client_secret: CLIENT_SECRET,
 		redirect_uris: [REDIRECT_URI],
 		response_types: ['code'],
+		token_endpoint_auth_method: 'client_secret_post',
 	})
 }
 initializeClient().catch(console.error)
@@ -55,19 +69,26 @@ const checkAuth = (req, res, next) => {
 	next()
 }
 
-// --- Endpoints (Punkty końcowe) API ---
-
-// 1. Endpoint, który React sprawdzi, czy jesteśmy zalogowani
-app.get('/api/me', checkAuth, (req, res) => {
-	if (req.isAuthenticated) {
-		res.json(req.session.userInfo)
-	} else {
-		res.status(401).json({ message: 'Not authenticated' })
+const requireAuth = (req, res, next) => {
+	if (!req.session.userInfo) {
+		return res.status(401).json({ message: 'Not authenticated' })
 	}
+	next()
+}
+// --- Endpoints API ---
+
+// Endpoint to return session user info
+app.get('/api/me', requireAuth, (req, res) => {
+	res.json(req.session.userInfo)
 })
 
-// 2. Endpoint rozpoczynający proces logowania
+// Endpoint to start login process
 app.get('/login', (req, res) => {
+
+	if (!client) {
+		return res.status(500)
+	}
+
 	const nonce = generators.nonce()
 	const state = generators.state()
 
@@ -82,18 +103,17 @@ app.get('/login', (req, res) => {
 	res.redirect(authUrl)
 })
 
-// 3. Endpoint wylogowania
+// Logout
 app.get('/logout', (req, res) => {
 	const logoutUrl = `${USER_POOL_DOMAIN}/logout?client_id=${CLIENT_ID}&logout_uri=${encodeURIComponent(FRONTEND_URL)}`
 
 	req.session.destroy(err => {
-		res.clearCookie('connect.sid') // Nazwa domyślnego ciasteczka sesji
+		res.clearCookie('connect.sid')
 		res.redirect(logoutUrl)
 	})
 })
 
-// 4. Endpoint Callback (tutaj wraca Cognito po logowaniu)
-// Używamy `new URL(...).pathname`, aby dostać samą ścieżkę (np. '/')
+// Call back endpoint
 const CALLBACK_PATH = new URL(REDIRECT_URI).pathname
 
 app.get(CALLBACK_PATH, async (req, res) => {
@@ -107,25 +127,20 @@ app.get(CALLBACK_PATH, async (req, res) => {
 		const userInfo = await client.userinfo(tokenSet.access_token)
 		req.session.userInfo = userInfo
 
-		// Sukces! Przekieruj z powrotem do aplikacji React
-		res.redirect(FRONTEND_URL)
+		res.redirect(FRONTEND_URL) // redirect to react app
 	} catch (err) {
 		console.error('Callback error:', err)
-		res.redirect(`${FRONTEND_URL}?error=auth_failed`)
+		res.redirect(`${FRONTEND_URL}?error=auth_failed`) // redirect to error page
 	}
 })
 
-// --- Serwowanie statyczne (na produkcję) ---
-// Ten kod serwuje zbudowaną aplikację React
-
+// take files from public dir
 app.use(express.static(path.join(__dirname, 'public')))
 
+// response to not existing endpoint
 app.get(/.*/, (req, res) => {
-	// Na wszystkie inne żądania odpowiadaj plikiem index.html Reacta
 	res.sendFile(path.join(__dirname, 'public', 'index.html'))
 })
-
-// --- Uruchomienie serwera ---
 
 app.listen(3000, () => {
 	console.log('Backend serwer API działa na http://localhost:3000')
