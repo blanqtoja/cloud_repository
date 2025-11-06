@@ -1,64 +1,80 @@
 import { useState, useEffect } from 'react'
 import axios from 'axios'
-// Możesz usunąć pliki App.css i index.css, jeśli chcesz czysty start
 
-// Ustaw stały adres URL Twojego backendu
 const API_URL = 'http://localhost:3000'
 
-// Ważne: Konfiguruj axios, aby ZAWSZE wysyłał ciasteczka (dzięki temu działa sesja)
 axios.defaults.withCredentials = true
 
 function App() {
-	const [userInfo, setUserInfo] = useState(null)
-	const [isLoading, setIsLoading] = useState(true) // Zaczynamy od ładowania
 
-	// Przy pierwszym ładowaniu komponentu, sprawdź sesję na backendzie
+	// states
+	const [userInfo, setUserInfo] = useState(null)
+	const [isLoading, setIsLoading] = useState(true) 
+
+	// files states
+	const [selectedFile, setSelectedFile] = useState(null)
+	const [uploadMessage, setUploadMessage] = useState('')
+
+	// Effects
 	useEffect(() => {
+		// firtly check session on /api/me
 		const checkSession = async () => {
 			try {
-                // Odpytaj nasz nowy endpoint /api/me
 				const response = await axios.get(`${API_URL}/api/me`)
-				setUserInfo(response.data) // Jeśli się uda, mamy dane użytkownika
+				setUserInfo(response.data) // set info about user from response
 			} catch (error) {
 				if (error.response && error.response.status === 401) {
-					setUserInfo(null) // 401 = Niezalogowany
+					setUserInfo(null) // user is not logged
 				} else {
-					// Inny błąd serwera
-					console.error('Błąd przy sprawdzaniu sesji:', error)
+					console.error('error: ', error)
 				}
 			}
-			setIsLoading(false) // Zakończ ładowanie
+			setIsLoading(false) // finish loading
 		}
 
 		checkSession()
-	}, []) // Pusty array [] = uruchom ten efekt tylko raz, przy starcie
+	}, []) 
 
-    // Pokaż ekran ładowania, dopóki nie mamy odpowiedzi z /api/me
-	if (isLoading) {
-		return <div>Trwa ładowanie...</div>
+	// Rndering
+
+	// loading screen
+    if (isLoading) {
+		return (
+			<div style={{ padding: '2rem' }}>
+				<h1>Loading...</h1>
+			</div>
+		)
 	}
 
 	return (
-		<div className="App">
-			<h1>Demo Logowania (React + Express + Cognito)</h1>
+		<div className='App' style={{ padding: '2rem', fontFamily: 'sans-serif' }}>
 
 			{userInfo ? (
-				// --- Widok po zalogowaniu ---
 				<div>
-					<h2>Witaj, {userInfo.username || userInfo.email}</h2>
-					<p>Oto Twoje dane (z /api/me):</p>
-					<pre>{JSON.stringify(userInfo, null, 2)}</pre>
+					<h2>Hi, {userInfo.username || userInfo.email}</h2>
+					<p>user data:</p>
+					<pre
+						style={{
+							background: '#f4f4f4',
+							padding: '1rem',
+							borderRadius: '8px',
+						}}>
+						{JSON.stringify(userInfo, null, 2)}
+					</pre>
 
-					{/* Link do endpointu /logout na naszym backendzie */}
-					<a href={`${API_URL}/logout`}>Wyloguj</a>
+					<a href={`${API_URL}/logout`} style={{ color: 'blue', marginRight: '1rem' }}>
+						Log out
+					</a>
+
+					<hr style={{ margin: '2rem 0' }} />
 				</div>
 			) : (
-				// --- Widok przed zalogowaniem ---
 				<div>
-					<p>Proszę, zaloguj się, aby kontynuować.</p>
+					<p>Hi, log in to continue</p>
 
-					{/* Link do endpointu /login na naszym backendzie */}
-					<a href={`${API_URL}/login`}>Zaloguj przez Cognito</a>
+					<a href={`${API_URL}/login`} style={{ color: 'blue' }}>
+						Log in
+					</a>
 				</div>
 			)}
 		</div>
